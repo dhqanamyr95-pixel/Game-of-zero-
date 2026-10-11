@@ -48,7 +48,23 @@ jobs:
           rm -rf "$T"
           mkdir -p "$T"
           echo "Downloading official Godot ${GODOT_VERSION} export templates..."
-          wget -q --tries=3 "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O /tmp/templates.tpz
+          V="${GODOT_VERSION}-stable"
+          F="Godot_v${V}_export_templates.tpz"
+          OK=0
+          for URL in \
+            "https://github.com/godotengine/godot/releases/download/${V}/${F}" \
+            "https://github.com/godotengine/godot-builds/releases/download/${V}/${F}" \
+            "https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${F}"; do
+            echo "Trying $URL"
+            if wget -nv --tries=3 "$URL" -O /tmp/templates.tpz; then
+              OK=1
+              break
+            fi
+          done
+          if [ "$OK" != "1" ]; then
+            echo "ERROR: could not download the export templates from any mirror"
+            exit 1
+          fi
           unzip -q -o /tmp/templates.tpz 'templates/android*' 'templates/version.txt' -d /tmp/tpl
           cp /tmp/tpl/templates/* "$T"/
           rm -f /tmp/templates.tpz
