@@ -44,7 +44,21 @@ jobs:
         run: |
           mkdir -v -p ~/.local/share/godot/export_templates/
           mkdir -v -p ~/.config/godot
-          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable || true
+          T=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$T"
+          if [ ! -f "$T/android_debug.apk" ]; then
+            FOUND=$(find /root /usr /opt /github/home -name android_debug.apk 2>/dev/null | head -1)
+            if [ -n "$FOUND" ]; then
+              echo "Using templates found in $(dirname "$FOUND")"
+              cp -r "$(dirname "$FOUND")"/* "$T"/
+            else
+              echo "Downloading official export templates..."
+              wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O /tmp/templates.tpz
+              unzip -q -o /tmp/templates.tpz -d /tmp/tpl
+              cp -r /tmp/tpl/templates/* "$T"/
+            fi
+          fi
+          ls -la "$T" | head -30
           keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore ~/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
           SDK="${ANDROID_HOME:-/usr/lib/android-sdk}"
           JDK="${JAVA_HOME:-$(dirname $(dirname $(readlink -f $(which javac))))}"
