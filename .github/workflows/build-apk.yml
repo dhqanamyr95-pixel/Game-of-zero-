@@ -19,6 +19,8 @@ jobs:
     name: Export Android APK
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    env:
+      GODOT_VERSION: "4.3"
     container:
       image: barichello/godot-ci:4.3
     steps:
@@ -45,36 +47,42 @@ jobs:
           mkdir -v -p ~/.local/share/godot/export_templates/
           mkdir -v -p ~/.config/godot
           T=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          IMG=/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           rm -rf "$T"
-          mkdir -p "$T"
-          echo "Downloading official Godot ${GODOT_VERSION} export templates..."
-          V="${GODOT_VERSION}-stable"
-          F="Godot_v${V}_export_templates.tpz"
-          OK=0
-          for URL in \
-            "https://github.com/godotengine/godot/releases/download/${V}/${F}" \
-            "https://github.com/godotengine/godot-builds/releases/download/${V}/${F}" \
-            "https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${F}"; do
-            echo "Trying $URL"
-            if wget -nv --tries=3 "$URL" -O /tmp/templates.tpz; then
-              OK=1
-              break
+          if [ -f "$IMG/android_debug.apk" ]; then
+            echo "Using export templates that come with the image: $IMG"
+            cp -r "$IMG" "$T"
+          else
+            echo "Templates not found in the image, downloading..."
+            mkdir -p "$T"
+            V="${GODOT_VERSION}-stable"
+            F="Godot_v${V}_export_templates.tpz"
+            OK=0
+            for URL in \
+              "https://github.com/godotengine/godot/releases/download/${V}/${F}" \
+              "https://github.com/godotengine/godot-builds/releases/download/${V}/${F}" \
+              "https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/${F}"; do
+              echo "Trying $URL"
+              if wget -nv --tries=3 "$URL" -O /tmp/templates.tpz; then
+                OK=1
+                break
+              fi
+            done
+            if [ "$OK" != "1" ]; then
+              echo "ERROR: could not download the export templates from any mirror"
+              exit 1
             fi
-          done
-          if [ "$OK" != "1" ]; then
-            echo "ERROR: could not download the export templates from any mirror"
-            exit 1
+            unzip -q -o /tmp/templates.tpz 'templates/android*' 'templates/version.txt' -d /tmp/tpl
+            cp /tmp/tpl/templates/* "$T"/
+            rm -f /tmp/templates.tpz
           fi
-          unzip -q -o /tmp/templates.tpz 'templates/android*' 'templates/version.txt' -d /tmp/tpl
-          cp /tmp/tpl/templates/* "$T"/
-          rm -f /tmp/templates.tpz
           if [ ! -f "$T/android_debug.apk" ]; then
-            echo "ERROR: android_debug.apk is missing after extraction"
-            ls -la /tmp/tpl/templates
+            echo "ERROR: android_debug.apk is missing in $T"
+            ls -la "$T"
             exit 1
           fi
           echo "Android templates ready:"
-          ls -la "$T"
+          ls -la "$T" | head -20
           keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore ~/debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
           SDK="${ANDROID_HOME:-/usr/lib/android-sdk}"
           JDK="${JAVA_HOME:-$(dirname $(dirname $(readlink -f $(which javac))))}"
