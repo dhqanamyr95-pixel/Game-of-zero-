@@ -99,7 +99,27 @@ jobs:
           godot --version
 
       - name: Import project
-        run: godot --headless --verbose --import || true
+        shell: bash
+        run: |
+          mkdir -p build
+          godot --headless --verbose --import 2>&1 | tee build/import.log || true
+
+      - name: Smoke test the game (headless)
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p build
+          : > build/smoke.log
+          for M in savanna forest iceage desert volcanic; do
+            echo "===== MAP $M =====" | tee -a build/smoke.log
+            timeout 120 godot --headless --path . -- --autotest --map=$M 2>&1 | tee -a build/smoke.log || true
+          done
+          {
+            echo "### Smoke test errors"
+            echo '```'
+            grep -n -E "SCRIPT ERROR|Parse Error|BOOT ERROR|ERROR:" build/smoke.log | head -40 || echo "none"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Export debug APK
         shell: bash
@@ -128,6 +148,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: export-log-${{ github.run_number }}
-          path: build/export.log
+          path: build/*.log
           if-no-files-found: ignore
           retention-days: 7
